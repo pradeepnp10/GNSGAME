@@ -47,6 +47,7 @@ let score = 0;
 let userMarker = null;
 let userCircle = null;
 let watchId = null;
+let locationFound = false;
 
 // Add markers to the map
 markers.forEach(marker => {
@@ -84,14 +85,29 @@ function updateUserLocation(position) {
     // Center map on user's location with appropriate zoom
     map.setView(userPosition, 13);
 
-    // Check proximity to markers
-    checkProximity(userPosition);
+    // If this is the first time we've found the location
+    if (!locationFound) {
+        locationFound = true;
+        const messageElement = document.getElementById('message');
+        messageElement.style.display = 'block';
+        messageElement.style.backgroundColor = '#d4edda';
+        messageElement.style.color = '#155724';
+        messageElement.textContent = "Location found! Questions will start in 5 seconds...";
+
+        // Start questions after 5 seconds
+        setTimeout(() => {
+            messageElement.style.display = 'none';
+            startQuestions();
+        }, 5000);
+    }
 }
 
 // Function to handle location errors
 function handleLocationError(error) {
     const messageElement = document.getElementById('message');
     messageElement.style.display = 'block';
+    messageElement.style.backgroundColor = '#f8d7da';
+    messageElement.style.color = '#721c24';
     
     switch(error.code) {
         case error.PERMISSION_DENIED:
@@ -107,21 +123,41 @@ function handleLocationError(error) {
             messageElement.textContent = "An unknown error occurred while getting location.";
     }
 
-    // Still start the game but centered on Australia
-    startGameWithoutLocation();
+    // Fall back to starting the game without location after 5 seconds
+    setTimeout(() => {
+        startGameWithoutLocation();
+    }, 5000);
 }
 
 // Start game without location
 function startGameWithoutLocation() {
     map.setView([-25.2744, 133.7751], 4);
+    const messageElement = document.getElementById('message');
+    messageElement.textContent = "Starting game without location...";
+    setTimeout(() => {
+        messageElement.style.display = 'none';
+        startQuestions();
+    }, 2000);
+}
+
+// Function to start showing questions
+function startQuestions() {
     showNextQuestion();
 }
 
 // Start game function with enhanced location tracking
 function startGame() {
     score = 0;
+    currentQuestionIndex = 0;
+    locationFound = false;
     updateScore(score);
     
+    const messageElement = document.getElementById('message');
+    messageElement.style.display = 'block';
+    messageElement.style.backgroundColor = '#cce5ff';
+    messageElement.style.color = '#004085';
+    messageElement.textContent = "Detecting your location...";
+
     // Check if geolocation is supported
     if (!navigator.geolocation) {
         handleLocationError({ code: 0, message: "Geolocation is not supported by this browser." });
@@ -132,7 +168,6 @@ function startGame() {
     navigator.geolocation.getCurrentPosition(
         (position) => {
             updateUserLocation(position);
-            showNextQuestion();
 
             // Start watching position with high accuracy
             watchId = navigator.geolocation.watchPosition(
@@ -172,12 +207,13 @@ window.onunload = function() {
     stopGame();
 };
 
-// Rest of your existing functions...
 function checkProximity(userPosition) {
     markers.forEach(marker => {
         const distance = getDistance(userPosition, marker.position);
         if (distance < 1000) { // 1 kilometer
-            showPopupQuestion(marker.question, marker.answer);
+            const question = markers[currentQuestionIndex].question;
+            const answer = markers[currentQuestionIndex].answer;
+            showPopupQuestion(question, answer);
         }
     });
 }
@@ -197,15 +233,19 @@ function getDistance(pos1, pos2) {
 
 function showNextQuestion() {
     if (currentQuestionIndex < markers.length) {
-        setTimeout(() => {
-            showPopupQuestion(
-                markers[currentQuestionIndex].question,
-                markers[currentQuestionIndex].answer
-            );
-            currentQuestionIndex++;
-        }, 1000);
+        showPopupQuestion(
+            markers[currentQuestionIndex].question,
+            markers[currentQuestionIndex].answer
+        );
     } else {
         alert(`Game Over! Final Score: ${score}`);
+        // Optional: restart the game
+        if (confirm("Would you like to play again?")) {
+            currentQuestionIndex = 0;
+            score = 0;
+            updateScore(score);
+            showNextQuestion();
+        }
     }
 }
 
@@ -218,11 +258,13 @@ function showPopupQuestion(question, correctAnswer) {
         score += 10;
         updateScore(score);
         alert("Correct! +10 points");
-        showNextQuestion();
+        currentQuestionIndex++;
+        setTimeout(showNextQuestion, 1000);
     } else {
         messageElement.textContent = "Incorrect answer. Try the next question!";
         messageElement.style.display = 'block';
-        showNextQuestion();
+        currentQuestionIndex++;
+        setTimeout(showNextQuestion, 1000);
     }
 }
 
